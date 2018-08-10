@@ -1,4 +1,6 @@
 # -*- coding: utf-8 -*-
+from urllib.parse import urlencode
+
 import scrapy
 import logging
 import sys
@@ -11,6 +13,8 @@ import hashlib
 # BeautifulSoup将html解析为对象进行处理，全部页面转变为字典或者数组，相对于正则表达式的方式，可以大大简化处理过程。
 # BeautifulSoup默认支持Python的标准HTML解析库，但是它也支持一些第三方的解析库： https://blog.csdn.net/kikaylee/article/details/56841789
 from bs4 import BeautifulSoup
+
+from python_scrapy.items import NetWorkSchoolRepertoryItem, NetWorkSchoolOptionsItem, NetWorkSchoolBasicAnswer
 
 logging.basicConfig(level=logging.INFO,  # 设置告警级别为INFO
                     # 自定义打印的格式
@@ -121,6 +125,7 @@ class NetworkSchoolSpider(scrapy.Spider):
         }
         logging.info("发起登陆请求")
 
+        # https://blog.csdn.net/qq_33689414/article/details/78694769
         yield scrapy.FormRequest.from_response(response,
                                                url=self.post_login_url,
                                                # formdata 的参数必须是字符串
@@ -159,15 +164,15 @@ class NetworkSchoolSpider(scrapy.Spider):
         logging.info("======解析试题页面开始=========")
         # print(response.text)
 
-        with open('试题库.html', 'w+', encoding='utf-8') as data:
-            data.write(response.text)
+        # with open('试题库.html', 'w+', encoding='utf-8') as data:
+        #     data.write(response.text)
         logging.info("======解析试题页面结束=========")
         # 返回的页面内存在ajax请求,ajax请求的url也是动态获取的
         bs = BeautifulSoup(response.text, 'html.parser')
         # 获取所有的script脚本
         scripts = bs.find_all('script')
         script = scripts[6].text
-        logging.debug(script)
+        # logging.debug(script)
         # 获取全局变量
         redoReg = re.compile((r"(?<=var redo = )\w+"))
         redoMatch = redoReg.search(script)
@@ -195,30 +200,89 @@ class NetworkSchoolSpider(scrapy.Spider):
             'url': url_data
         }
 
-        yield [scrapy.FormRequest.from_response(response,
-                                                url=postUrl,
-                                                formdata=formdata,
-                                                method='post',
-                                                headers=post_headers,
-                                                callback=self.parse_item,
-                                                dont_filter=True)]
+        # 这里是post请求但是我并没有使用FormRequest.from_response() ,是因为使用该方法请求的地址是当前页面的地址,即并非我想要请求的ajax地址原因是ajax是异步的,
+        # 而FormRequest是Request的子类，一般用作表单数据提交,而表单的提交一般来说都是同步的,即表单的提交地址就是浏览器地址栏的地址,也就是当前页面地址,所以请求的地址会出错,故不能使用
+        yield scrapy.Request(url=postUrl,
+                             # 此处接收字符串类型或者字节对象,不能接收字典
+                             body=json.dumps(formdata),
+                             method='POST',
+                             headers=post_headers,
+                             callback=self.parse_item,
+                             dont_filter=True)
 
     # 解析返回的json数据
     def parse_item(self, response):
         logging.debug("获取试题请求URL")
         # 返回的是json数据
-        ret = json.load(response.body)
+        ret = json.loads(response.body)
+        logging.debug(ret)
         if ret['s'] == 10006:  # 操作成功
             get_item_url = ret['list']['url']
+            get_item_url = "http://wx.233.com{}".format(get_item_url)
             # 该请求返回页面,页面内部包含页面md5值,以及下一次ajax请求url
-            yield scrapy.Request(get_item_url, callback=self.parse_ajax_item_page)
+            yield scrapy.Request(get_item_url, callback=self.parse_ajax_item_page, dont_filter=True)
         else:
             pass
 
     # 解析试题页,找到下一次ajax url 及参数
     def parse_ajax_item_page(self, response):
-        logging.debug("解析试题页,找到下一次ajax url 及参数")
+        logging.debug("返回新页面,改页面有试卷md5值,以及有我们需要的数据的ajax请求地址")
+        bs = BeautifulSoup(response.text, 'html.parser')
+        scripts = bs.find_all('script', limit=5)
+        # with open('scripts.html', 'w+', encoding='utf-8') as data:
+        #     data.write(response.text)
+        script = scripts[4].text
+        logging.debug(script)
+        # 页面md5
+        md5Reg = re.compile(r"(?<=page_paperMd5   = ')[^']+")
+        md5Match = md5Reg.search(script)
+        page_paperMd5 = md5Match.group(0)
+        logging.debug("得到页面MD5值：%s" % (page_paperMd5))
+        # 考试类型
+        pageTypeReg = re.compile(r"(?<=page_fromType {3}= )[^,]+")
+        pageTypeMatch = pageTypeReg.search(script)
+        pageType = pageTypeMatch.group(0)
+        logging.debug("得到考试类型：%s" % (pageType))
+
+        ajaxParam = {
+            'md5': page_paperMd5,
+            'type': str(pageType),
+            'pageIndex': 1,
+            'pageSize': 20
+        }
+        # 将字典参数转换成拼接 xx=xx&yy=yy 的方式
+        param = urlencode(ajaxParam)
+        logging.debug("解析试题页,找到下一次ajax url 及参数,发起请求")
+        # url = "http://wx.233.com/tiku/exam/GetExam?md5=%(md5)s&type=%(type)s&pageIndex=%(pageIndex)s&pageSize=%(pageSize)s" % (ajaxParam)
+        url = "http://wx.233.com/tiku/exam/GetExam?" + param
+        yield scrapy.Request(url=url,
+                             method='GET',
+                             callback=self.parse_ajax_item_json,
+                             dont_filter=True)
 
     # 对请求Ajax返回的试题数据, 进行处理
     def parse_ajax_item_json(self, response):
         logging.debug("对请求Ajax返回的试题数据,进行处理")
+        logging.debug("返回的数据类型是 bytes")
+        print(type(response.body))
+        # 解决中文乱码问题
+        data = json.loads(response.body, encoding="utf-8")
+        if data['s'] == 10006:
+            examList = data['examDtoList']
+            for exam in examList:
+
+                repertoryItem = NetWorkSchoolRepertoryItem()
+                repertoryItem['test_stem'] = exam['content']
+                repertoryItem['choice'] = exam['examTypeName']
+                repertoryItem['test_type'] = '会计基础'
+
+                optionsItemList = []
+                for option in exam['optionList']:
+                    optionsItem = NetWorkSchoolOptionsItem()
+                    optionsItem['option_data'] = option
+                    optionsItemList.append(optionsItem)
+
+                basicAnswer = NetWorkSchoolBasicAnswer()
+                basicAnswer['result'] = exam['answer']
+
+            yield repertoryItem, optionsItemList, basicAnswer

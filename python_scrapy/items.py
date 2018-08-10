@@ -14,6 +14,7 @@ class PythonScrapyItem(scrapy.Item):
     pass
 
 
+# 题库
 class NetWorkSchoolRepertoryItem(scrapy.Item):
     # 题干
     test_stem = scrapy.Field()
@@ -23,8 +24,15 @@ class NetWorkSchoolRepertoryItem(scrapy.Item):
     test_type = scrapy.Field()
 
 
+# 试题选项
 class NetWorkSchoolOptionsItem(scrapy.Item):
     # 选择答案A,B,C,D
     select_data = scrapy.Field()
     # 答案内容
     option_data = scrapy.Field()
+
+
+# 标准答案
+class NetWorkSchoolBasicAnswer(scrapy.Item):
+    # 标准答案
+    result = scrapy.Field()

@@ -21,6 +21,10 @@ NEWSPIDER_MODULE = 'python_scrapy.spiders'
 # 不访问网站ROBOTS.txt文件,以解决网站反爬虫限制
 ROBOTSTXT_OBEY = False
 
+# 修改默认的输出编码方式(不设置的话,返回json中文乱码[xe4\xbd\x9c\xe6\x88])
+FEED_EXPORT_ENCODING = 'utf-8'
+
+
 # Configure maximum concurrent requests performed by Scrapy (default: 16)
 # CONCURRENT_REQUESTS = 32
 
