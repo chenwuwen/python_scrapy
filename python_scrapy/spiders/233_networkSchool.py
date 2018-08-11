@@ -14,7 +14,7 @@ import hashlib
 # BeautifulSoup默认支持Python的标准HTML解析库，但是它也支持一些第三方的解析库： https://blog.csdn.net/kikaylee/article/details/56841789
 from bs4 import BeautifulSoup
 
-from python_scrapy.items import NetWorkSchoolRepertoryItem, NetWorkSchoolOptionsItem, NetWorkSchoolBasicAnswer
+from python_scrapy.items import NetWorkSchoolRepertoryItem
 
 logging.basicConfig(level=logging.INFO,  # 设置告警级别为INFO
                     # 自定义打印的格式
@@ -29,7 +29,14 @@ logging.basicConfig(level=logging.INFO,  # 设置告警级别为INFO
 
 
 class NetworkSchoolSpider(scrapy.Spider):
+    # 指定爬虫名称
     name = '233_networkSchool'
+    # 指定爬虫所用pipeline
+    custom_settings = {
+        'ITEM_PIPELINES': {
+            'python_scrapy.pipelines.NetWorkSchoolPipeline': 400
+        }
+    }
     # 233网校登陆名,密码 nncf3dot@4059.com  123456
     allowed_domains = ['wx.233.com/']
     start_urls = ['http://wx.233.com/tiku/chapter/48']
@@ -93,7 +100,7 @@ class NetworkSchoolSpider(scrapy.Spider):
                 # print(iscz)
                 url = baseAjaxPath % (chapterClassId, chapterId, iscz, self.start_urls[0])
                 url = 'http://wx.233.com' + url
-                # logging.info("%s的URL: %s" % (title, url))
+                logging.info("%s的URL: %s" % (title, url))
                 # 试题url解析(有时候会发现,request请求并不走回调函数：解决方法https://blog.csdn.net/honglicu123/article/details/75453107/)
                 yield scrapy.Request(url, dont_filter=True, callback=self.parse_item_frame)
 
@@ -142,15 +149,15 @@ class NetworkSchoolSpider(scrapy.Spider):
                                                dont_filter=True
                                                )
 
-    # 解析登陆返回页面
+    # 解析登陆返回,该网站登陆使用ajax异步登陆
     def parse_login_success(self, response):
-        logging.info("登陆请求成功后的解析页面")
+        logging.info("登陆请求发起成功")
         logging.info("======================================")
-        logging.info(response.text)
-        logging.info("======================================")
-        if '操作成功' in response.text:
+        logging.info(response.body)
+        ret = response.body
+        if ret['s'] == 10006:
             logging.info('============登陆成功！===============')
-            # 登陆成功开始调用父类的start_requests方法,即开始进行爬取
+            # 登陆成功开始调用父类的start_requests方法,即开始进行爬取，即 parse方法
             yield from super().start_requests()
         else:
             logging.info('==========登陆失败=============')
@@ -162,10 +169,9 @@ class NetworkSchoolSpider(scrapy.Spider):
     # 解析试题页，仅仅只是试题页，试题数据是ajax请求的
     def parse_item_frame(self, response):
         logging.info("======解析试题页面开始=========")
-        # print(response.text)
 
-        # with open('试题库.html', 'w+', encoding='utf-8') as data:
-        #     data.write(response.text)
+        with open('试题库.html', 'w+', encoding='utf-8') as data:
+            data.write(response.text)
         logging.info("======解析试题页面结束=========")
         # 返回的页面内存在ajax请求,ajax请求的url也是动态获取的
         bs = BeautifulSoup(response.text, 'html.parser')
@@ -270,19 +276,11 @@ class NetworkSchoolSpider(scrapy.Spider):
         if data['s'] == 10006:
             examList = data['examDtoList']
             for exam in examList:
-
                 repertoryItem = NetWorkSchoolRepertoryItem()
                 repertoryItem['test_stem'] = exam['content']
                 repertoryItem['choice'] = exam['examTypeName']
                 repertoryItem['test_type'] = '会计基础'
-
-                optionsItemList = []
-                for option in exam['optionList']:
-                    optionsItem = NetWorkSchoolOptionsItem()
-                    optionsItem['option_data'] = option
-                    optionsItemList.append(optionsItem)
-
-                basicAnswer = NetWorkSchoolBasicAnswer()
-                basicAnswer['result'] = exam['answer']
-
-            yield repertoryItem, optionsItemList, basicAnswer
+                repertoryItem['option_data'] = exam['optionList']
+                repertoryItem['result'] = exam['answer']
+                logging.debug("item对象是：" + repertoryItem)
+                yield repertoryItem
