@@ -27,5 +27,5 @@ class NetWorkSchoolRepertoryItem(scrapy.Item):
     # 标准答案
     result = scrapy.Field()
 
-
-
+    def __str__(self):
+        return "题干：" + self['test_stem']

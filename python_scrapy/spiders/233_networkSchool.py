@@ -87,22 +87,21 @@ class NetworkSchoolSpider(scrapy.Spider):
         # 需要注意的是,当使用xpath选择class属性时,如果元素包含多个class属性,需要将所有属性都添加上,否则查询不到
         tbodys = response.xpath("//table[@class='ui-table ui-table-row']/tbody").extract()
         for index, tbody in enumerate(tbodys):
-            if index == 1:
-                # 打印出来的是html的内容
-                # print(tbody)
-                # 如果需要在html字符串中再次使用选择器,则需要将其封装为Selector选择器对象 https://blog.csdn.net/dawnranger/article/details/50037703
-                selector = scrapy.Selector(text=tbody)
-                # 这里注意要取相对路径,extract_first() 其返回的是列表的第一项,而不是整个列表,
-                chapterId = selector.xpath(".//tr/@data-chapterid").extract_first()
-                # 需要注意的是这里的td[1] 中的索引表示第一个,也就是说这里的索引是从1开始的,而不是0  text()获取标签里面的值，extract()则是把selector对象变成字符串
-                title = selector.xpath(".//tr/td[1]/h2/a/text()").extract()[1]
-                iscz = selector.xpath(".//td[@class='czct']/a/@data-iscz").extract_first()
-                # print(iscz)
-                url = baseAjaxPath % (chapterClassId, chapterId, iscz, self.start_urls[0])
-                url = 'http://wx.233.com' + url
-                logging.info("%s的URL: %s" % (title, url))
-                # 试题url解析(有时候会发现,request请求并不走回调函数：解决方法https://blog.csdn.net/honglicu123/article/details/75453107/)
-                yield scrapy.Request(url, dont_filter=True, callback=self.parse_item_frame)
+            # 打印出来的是html的内容
+            # print(tbody)
+            # 如果需要在html字符串中再次使用选择器,则需要将其封装为Selector选择器对象 https://blog.csdn.net/dawnranger/article/details/50037703
+            selector = scrapy.Selector(text=tbody)
+            # 这里注意要取相对路径,extract_first() 其返回的是列表的第一项,而不是整个列表,
+            chapterId = selector.xpath(".//tr/@data-chapterid").extract_first()
+            # 需要注意的是这里的td[1] 中的索引表示第一个,也就是说这里的索引是从1开始的,而不是0  text()获取标签里面的值，extract()则是把selector对象变成字符串
+            title = selector.xpath(".//tr/td[1]/h2/a/text()").extract()[1]
+            iscz = selector.xpath(".//td[@class='czct']/a/@data-iscz").extract_first()
+            # print(iscz)
+            url = baseAjaxPath % (chapterClassId, chapterId, iscz, self.start_urls[0])
+            url = 'http://wx.233.com' + url
+            logging.info("%s的URL: %s" % (title, url))
+            # 试题url解析(有时候会发现,request请求并不走回调函数：解决方法https://blog.csdn.net/honglicu123/article/details/75453107/)
+            yield scrapy.Request(url, dont_filter=True, callback=self.parse_item_frame)
 
     # 重写了爬虫类的方法, 实现了自定义请求, 运行成功后会调用callback回调函数
     # 先打开登陆页，随后调用登陆方法
@@ -153,8 +152,8 @@ class NetworkSchoolSpider(scrapy.Spider):
     def parse_login_success(self, response):
         logging.info("登陆请求发起成功")
         logging.info("======================================")
-        logging.info(response.body)
-        ret = response.body
+        ret = json.loads(response.body, encoding='UTF-8')
+        logging.info("登录请求,返回值：%s" % (ret))
         if ret['s'] == 10006:
             logging.info('============登陆成功！===============')
             # 登陆成功开始调用父类的start_requests方法,即开始进行爬取，即 parse方法
@@ -170,8 +169,8 @@ class NetworkSchoolSpider(scrapy.Spider):
     def parse_item_frame(self, response):
         logging.info("======解析试题页面开始=========")
 
-        with open('试题库.html', 'w+', encoding='utf-8') as data:
-            data.write(response.text)
+        # with open('试题库.html', 'w+', encoding='utf-8') as data:
+        #     data.write(response.text)
         logging.info("======解析试题页面结束=========")
         # 返回的页面内存在ajax请求,ajax请求的url也是动态获取的
         bs = BeautifulSoup(response.text, 'html.parser')
@@ -220,7 +219,7 @@ class NetworkSchoolSpider(scrapy.Spider):
     def parse_item(self, response):
         logging.debug("获取试题请求URL")
         # 返回的是json数据
-        ret = json.loads(response.body)
+        ret = json.loads(response.body, encoding='UTF-8')
         logging.debug(ret)
         if ret['s'] == 10006:  # 操作成功
             get_item_url = ret['list']['url']
@@ -238,7 +237,7 @@ class NetworkSchoolSpider(scrapy.Spider):
         # with open('scripts.html', 'w+', encoding='utf-8') as data:
         #     data.write(response.text)
         script = scripts[4].text
-        logging.debug(script)
+        # logging.debug(script)
         # 页面md5
         md5Reg = re.compile(r"(?<=page_paperMd5   = ')[^']+")
         md5Match = md5Reg.search(script)
@@ -254,7 +253,7 @@ class NetworkSchoolSpider(scrapy.Spider):
             'md5': page_paperMd5,
             'type': str(pageType),
             'pageIndex': 1,
-            'pageSize': 20
+            'pageSize': 1000
         }
         # 将字典参数转换成拼接 xx=xx&yy=yy 的方式
         param = urlencode(ajaxParam)
@@ -274,13 +273,15 @@ class NetworkSchoolSpider(scrapy.Spider):
         # 解决中文乱码问题
         data = json.loads(response.body, encoding="utf-8")
         if data['s'] == 10006:
-            examList = data['examDtoList']
+            logging.debug("返回一堆试题数据")
+            examList = data['list']['examDtoList']
             for exam in examList:
                 repertoryItem = NetWorkSchoolRepertoryItem()
                 repertoryItem['test_stem'] = exam['content']
                 repertoryItem['choice'] = exam['examTypeName']
-                repertoryItem['test_type'] = '会计基础'
+                # todo 试题类型[会计基础,会计电算化,道德],暂时无法判断其类型
+                repertoryItem['test_type'] = 'basicAccount'
                 repertoryItem['option_data'] = exam['optionList']
                 repertoryItem['result'] = exam['answer']
-                logging.debug("item对象是：" + repertoryItem)
+                logging.debug("item对象是：" + repertoryItem.__str__())
                 yield repertoryItem

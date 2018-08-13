@@ -40,7 +40,7 @@ DOWNLOAD_DELAY = 3
 # Disable cookies (enabled by default)
 # 禁用cookie追踪降低被发现几率
 # 除非您 真的 需要，否则请禁止cookies。在进行通用爬取时cookies并不需要， (搜索引擎则忽略cookies)。禁止cookies能减少CPU使用率及Scrapy爬虫在内存中记录的踪迹，提高性能。
-COOKIES_ENABLED = False
+COOKIES_ENABLED = True
 
 # Disable Telnet Console (enabled by default)
 # TELNETCONSOLE_ENABLED = False
