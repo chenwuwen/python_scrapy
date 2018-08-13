@@ -87,21 +87,23 @@ class NetworkSchoolSpider(scrapy.Spider):
         # 需要注意的是,当使用xpath选择class属性时,如果元素包含多个class属性,需要将所有属性都添加上,否则查询不到
         tbodys = response.xpath("//table[@class='ui-table ui-table-row']/tbody").extract()
         for index, tbody in enumerate(tbodys):
-            # 打印出来的是html的内容
-            # print(tbody)
-            # 如果需要在html字符串中再次使用选择器,则需要将其封装为Selector选择器对象 https://blog.csdn.net/dawnranger/article/details/50037703
-            selector = scrapy.Selector(text=tbody)
-            # 这里注意要取相对路径,extract_first() 其返回的是列表的第一项,而不是整个列表,
-            chapterId = selector.xpath(".//tr/@data-chapterid").extract_first()
-            # 需要注意的是这里的td[1] 中的索引表示第一个,也就是说这里的索引是从1开始的,而不是0  text()获取标签里面的值，extract()则是把selector对象变成字符串
-            title = selector.xpath(".//tr/td[1]/h2/a/text()").extract()[1]
-            iscz = selector.xpath(".//td[@class='czct']/a/@data-iscz").extract_first()
-            # print(iscz)
-            url = baseAjaxPath % (chapterClassId, chapterId, iscz, self.start_urls[0])
-            url = 'http://wx.233.com' + url
-            logging.info("%s的URL: %s" % (title, url))
-            # 试题url解析(有时候会发现,request请求并不走回调函数：解决方法https://blog.csdn.net/honglicu123/article/details/75453107/)
-            yield scrapy.Request(url, dont_filter=True, callback=self.parse_item_frame)
+            # 第一行是表头,不参与爬取
+            if index > 0:
+                # 打印出来的是html的内容
+                # print(tbody)
+                # 如果需要在html字符串中再次使用选择器,则需要将其封装为Selector选择器对象 https://blog.csdn.net/dawnranger/article/details/50037703
+                selector = scrapy.Selector(text=tbody)
+                # 这里注意要取相对路径,extract_first() 其返回的是列表的第一项,而不是整个列表,
+                chapterId = selector.xpath(".//tr/@data-chapterid").extract_first()
+                # 需要注意的是这里的td[1] 中的索引表示第一个,也就是说这里的索引是从1开始的,而不是0  text()获取标签里面的值，extract()则是把selector对象变成字符串
+                title = selector.xpath(".//tr/td[1]/h2/a/text()").extract()[1]
+                iscz = selector.xpath(".//td[@class='czct']/a/@data-iscz").extract_first()
+                # print(iscz)
+                url = baseAjaxPath % (chapterClassId, chapterId, iscz, self.start_urls[0])
+                url = 'http://wx.233.com' + url
+                logging.info("%s的URL: %s" % (title, url))
+                # 试题url解析(有时候会发现,request请求并不走回调函数：解决方法https://blog.csdn.net/honglicu123/article/details/75453107/)
+                yield scrapy.Request(url, dont_filter=True, callback=self.parse_item_frame)
 
     # 重写了爬虫类的方法, 实现了自定义请求, 运行成功后会调用callback回调函数
     # 先打开登陆页，随后调用登陆方法
