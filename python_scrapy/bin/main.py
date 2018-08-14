@@ -7,7 +7,7 @@
 """
 import datetime
 import subprocess
-import os, sys
+import os, sys, time, sched
 
 print("当前文件真实路径：%s" % (os.path.realpath(__file__)))
 print("当前文件绝对路径：%s" % (os.path.abspath(__file__)))
@@ -30,3 +30,47 @@ if __name__ == '__main__':
     subprocess.call('scrapy crawl %s' % (spider_name))
     end_time = datetime.datetime.now().second
     print("爬取结束,总计用时：%d秒" % (end_time - start_time))
+
+# 关于爬虫任务的定时执行有两种方式,一种是代码实现,而是 在操作系统中实现,如Liunx中CronTab
+# 代码方式实现
+# 1.最简单的方法：直接使用Time类
+# if __name__ == '__main__':
+#     while True:
+#         time.sleep(86400)  # 每隔一天运行一次 24*60*60=86400s
+#         print("========启动爬虫=========")
+#         start_time = datetime.datetime.now().second
+#         subprocess.call('scrapy crawl %s' % (spider_name))
+#         end_time = datetime.datetime.now().second
+#         print("爬取结束,总计用时：%d秒" % (end_time - start_time))
+
+# 2.使用标准库的sched模块
+# 初始化sched模块的scheduler类
+# 第一个参数是一个可以返回时间戳的函数，第二个参数可以在定时未到达之前阻塞。
+# schedule = sched.scheduler(time.time, time.sleep)
+
+
+# 被周期性调度触发的函数
+# def func():
+#     print("========启动爬虫=========")
+#     start_time = datetime.datetime.now().second
+#     subprocess.call('scrapy crawl %s' % (spider_name))
+#     end_time = datetime.datetime.now().second
+#     print("爬取结束,总计用时：%d秒" % (end_time - start_time))
+#
+#
+# def perform1(inc):
+#     schedule.enter(inc, 0, perform1, (inc,))
+#     # 需要周期执行的函数
+#     func()
+#
+#
+# def main():
+#     schedule.enter(0, 0, perform1, (86400,))
+#
+#
+# if __name__ == '__main__':
+#     main()
+#     schedule.run()
+
+
+# 操作系统方式定时执行爬虫任务 ：https://blog.csdn.net/qq_21768483/article/details/78725481
